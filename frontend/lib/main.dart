@@ -9,15 +9,16 @@ import 'screens/name_screen.dart';
 import 'screens/rooms_screen.dart';
 import 'theme/app_theme.dart';
 
-// ── Change this to your machine's IP when running on a physical device ──
-const String kServerUrl = 'http://localhost:3000';
+// ── Change to your machine's local IP when running on a physical device ──
+// Example: const kServer = 'http://192.168.1.42:3000';
+const kServer = 'http://localhost:3000';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Color(0xFF054C44),
-    statusBarIconBrightness: Brightness.light,
-  ));
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   runApp(const SimpleChatApp());
 }
 
@@ -26,8 +27,8 @@ class SimpleChatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final api = ApiService(baseUrl: kServerUrl);
-    final socket = SocketService(serverUrl: kServerUrl);
+    final api = ApiService(baseUrl: kServer);
+    final socket = SocketService(serverUrl: kServer);
 
     return MultiProvider(
       providers: [
@@ -66,17 +67,21 @@ class _RootState extends State<_Root> {
   Widget build(BuildContext context) {
     if (!_ready) {
       return const Scaffold(
-        backgroundColor: C.teal,
+        backgroundColor: C.appBar,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.chat_bubble_rounded, size: 72, color: Colors.white),
-              SizedBox(height: 20),
-              SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white54),
+              Icon(Icons.chat_bubble_rounded, size: 80, color: Colors.white),
+              SizedBox(height: 24),
+              Text(
+                'SimpleChat',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
               ),
             ],
           ),
@@ -84,8 +89,7 @@ class _RootState extends State<_Root> {
       );
     }
 
-    return context.watch<AuthProvider>().isAuthenticated
-        ? const RoomsScreen()
-        : const NameScreen();
+    final auth = context.watch<AuthProvider>();
+    return auth.isAuthenticated ? const RoomsScreen() : const NameScreen();
   }
 }

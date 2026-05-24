@@ -14,6 +14,9 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, Set<String>> _typing = {};
   bool _roomsLoading = false;
 
+  // Notify chat screen when a new message arrives in a specific room
+  final Map<String, VoidCallback> _newMessageListeners = {};
+
   ChatProvider({required this.api, required this.socket}) {
     socket.onNewMessage = _onMessage;
     socket.onReactionUpdated = _onReaction;
@@ -22,14 +25,26 @@ class ChatProvider extends ChangeNotifier {
 
   List<Room> get rooms => _rooms;
   bool get roomsLoading => _roomsLoading;
+
   List<Message> msgs(String roomId) => _msgs[roomId] ?? [];
+
   Set<String> typing(String roomId) => _typing[roomId] ?? {};
+
+  void setNewMessageListener(String roomId, VoidCallback cb) {
+    _newMessageListeners[roomId] = cb;
+  }
+
+  void clearNewMessageListener(String roomId) {
+    _newMessageListeners.remove(roomId);
+  }
 
   Future<void> loadRooms() async {
     _roomsLoading = true;
     notifyListeners();
     try {
       _rooms = await api.getRooms();
+    } catch (_) {
+      // Keep existing rooms on error
     } finally {
       _roomsLoading = false;
       notifyListeners();
@@ -38,17 +53,27 @@ class ChatProvider extends ChangeNotifier {
 
   Future<void> loadMessages(String roomId, {bool refresh = false}) async {
     if (_msgs.containsKey(roomId) && !refresh) return;
-    _msgs[roomId] = await api.getMessages(roomId);
-    notifyListeners();
+    try {
+      _msgs[roomId] = await api.getMessages(roomId);
+      notifyListeners();
+    } catch (_) {
+      _msgs[roomId] = [];
+      notifyListeners();
+    }
   }
 
-  Future<void> loadOlder(String roomId) async {
-    final existing = _msgs[roomId] ?? [];
-    if (existing.isEmpty) return;
-    final older = await api.getMessages(roomId, before: existing.first.createdAt.toIso8601String());
-    if (older.isNotEmpty) {
+  Future<bool> loadOlder(String roomId) async {
+    final existing = _msgs[roomId];
+    if (existing == null || existing.isEmpty) return false;
+    try {
+      final older = await api.getMessages(roomId,
+          before: existing.first.createdAt.toIso8601String());
+      if (older.isEmpty) return false;
       _msgs[roomId] = [...older, ...existing];
       notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -58,11 +83,12 @@ class ChatProvider extends ChangeNotifier {
 
   void toggleReaction(String messageId, String emoji, String myUsername) {
     for (final msgs in _msgs.values) {
-      final idx = msgs.indexWhere((m) => m.id == messageId);
-      if (idx < 0) continue;
-      final msg = msgs[idx];
-      final existing = msg.reactions.where((r) => r.emoji == emoji).firstOrNull;
-      if (existing != null && existing.users.contains(myUsername)) {
+      final msg = msgs.where((m) => m.id == messageId).firstOrNull;
+      if (msg == null) continue;
+      final existing = msg.reactions
+          .where((r) => r.emoji == emoji && r.users.contains(myUsername))
+          .firstOrNull;
+      if (existing != null) {
         socket.removeReaction(messageId, emoji);
       } else {
         socket.addReaction(messageId, emoji);
@@ -77,12 +103,12 @@ class ChatProvider extends ChangeNotifier {
   Future<Room> startDm(String targetUserId) async {
     final data = await api.createDm(targetUserId);
     final room = Room.fromJson(data);
-    if (!_rooms.any((r) => r.id == room.id)) {
-      _rooms = [room, ..._rooms];
-      notifyListeners();
-    } else {
-      return _rooms.firstWhere((r) => r.id == room.id);
+    final existingIdx = _rooms.indexWhere((r) => r.id == room.id);
+    if (existingIdx >= 0) {
+      return _rooms[existingIdx];
     }
+    _rooms = [room, ..._rooms];
+    notifyListeners();
     return room;
   }
 
@@ -97,7 +123,11 @@ class ChatProvider extends ChangeNotifier {
   Future<List<User>> allUsers() => api.getAllUsers();
 
   void _onMessage(Message msg) {
-    _msgs[msg.roomId] = [...(_msgs[msg.roomId] ?? []), msg];
+    final list = List<Message>.from(_msgs[msg.roomId] ?? []);
+    list.add(msg);
+    _msgs[msg.roomId] = list;
+
+    // Update room preview
     final idx = _rooms.indexWhere((r) => r.id == msg.roomId);
     if (idx >= 0) {
       final updated = _rooms[idx].copyWith(
@@ -106,24 +136,34 @@ class ChatProvider extends ChangeNotifier {
       );
       _rooms = [updated, ..._rooms.where((r) => r.id != msg.roomId)];
     }
+
+    // Notify active chat screen so it can scroll
+    _newMessageListeners[msg.roomId]?.call();
+
     notifyListeners();
   }
 
   void _onReaction(String messageId, List<ReactionCount> reactions) {
+    bool changed = false;
     for (final roomId in _msgs.keys) {
       final idx = _msgs[roomId]!.indexWhere((m) => m.id == messageId);
       if (idx < 0) continue;
       final list = List<Message>.from(_msgs[roomId]!);
       list[idx] = list[idx].copyWith(reactions: reactions);
       _msgs[roomId] = list;
-      notifyListeners();
+      changed = true;
       break;
     }
+    if (changed) notifyListeners();
   }
 
   void _onTyping(String userId, String username, String roomId, bool isTyping) {
     _typing[roomId] ??= {};
-    isTyping ? _typing[roomId]!.add(username) : _typing[roomId]!.remove(username);
+    if (isTyping) {
+      _typing[roomId]!.add(username);
+    } else {
+      _typing[roomId]!.remove(username);
+    }
     notifyListeners();
   }
 }

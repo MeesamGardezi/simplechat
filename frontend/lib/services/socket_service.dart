@@ -15,12 +15,23 @@ class SocketService {
 
   SocketService({required this.serverUrl});
 
+  bool get isConnected => _socket?.connected ?? false;
+
   void connect(String token) {
-    _socket = io.io(serverUrl, <String, dynamic>{
-      'transports': ['websocket'],
-      'auth': {'token': token},
-      'autoConnect': true,
-    });
+    // Always clean up the old socket before creating a new one
+    _socket?.clearListeners();
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
+
+    _socket = io.io(serverUrl, io.OptionBuilder()
+        .setTransports(['websocket'])
+        .setAuth({'token': token})
+        .enableAutoConnect()
+        .enableReconnection()
+        .setReconnectionAttempts(10)
+        .setReconnectionDelay(1000)
+        .build());
 
     _socket!.on('new_message', (data) {
       if (data is Map<String, dynamic>) {
@@ -52,11 +63,7 @@ class SocketService {
 
   void joinRoom(String roomId) => _socket?.emit('join_room', {'room_id': roomId});
 
-  void sendMessage({
-    required String roomId,
-    required String content,
-    String? replyToId,
-  }) {
+  void sendMessage({required String roomId, required String content, String? replyToId}) {
     _socket?.emit('send_message', {
       'room_id': roomId,
       'content': content,
@@ -64,22 +71,19 @@ class SocketService {
     });
   }
 
-  void addReaction(String messageId, String emoji) {
-    _socket?.emit('add_reaction', {'message_id': messageId, 'emoji': emoji});
-  }
+  void addReaction(String messageId, String emoji) =>
+      _socket?.emit('add_reaction', {'message_id': messageId, 'emoji': emoji});
 
-  void removeReaction(String messageId, String emoji) {
-    _socket?.emit('remove_reaction', {'message_id': messageId, 'emoji': emoji});
-  }
+  void removeReaction(String messageId, String emoji) =>
+      _socket?.emit('remove_reaction', {'message_id': messageId, 'emoji': emoji});
 
-  void sendTyping(String roomId, {required bool isTyping}) {
-    _socket?.emit('typing', {'room_id': roomId, 'is_typing': isTyping});
-  }
+  void sendTyping(String roomId, {required bool isTyping}) =>
+      _socket?.emit('typing', {'room_id': roomId, 'is_typing': isTyping});
 
   void disconnect() {
+    _socket?.clearListeners();
     _socket?.disconnect();
+    _socket?.dispose();
     _socket = null;
   }
-
-  bool get isConnected => _socket?.connected ?? false;
 }

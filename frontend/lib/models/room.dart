@@ -17,9 +17,9 @@ class Room {
 
   factory Room.fromJson(Map<String, dynamic> json) => Room(
         id: json['id'] as String,
-        name: json['name'] as String,
+        name: (json['name'] as String?) ?? 'Chat',
         isGroup: (json['is_group'] as int? ?? 0) == 1,
-        avatarColor: json['avatar_color'] as String? ?? '#075E54',
+        avatarColor: (json['avatar_color'] as String?) ?? '#075E54',
         lastMessage: json['last_message'] as String?,
         lastMessageAt: json['last_message_at'] as String?,
       );

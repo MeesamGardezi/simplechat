@@ -89,7 +89,7 @@ router.post('/', (req: Request, res: Response): void => {
     }
   }
 
-  res.status(201).json({ id, name: name.trim(), is_group: 1, created_by: userId });
+  res.status(201).json({ id, name: name.trim(), is_group: 1, avatar_color: '#075E54', created_by: userId });
 });
 
 // Create or get a DM room
@@ -104,7 +104,7 @@ router.post('/dm', (req: Request, res: Response): void => {
 
   const db = getDb();
 
-  const targetUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(target_user_id) as User | undefined;
+  const targetUser = db.prepare('SELECT id, username, avatar_color FROM users WHERE id = ?').get(target_user_id) as (User & { avatar_color: string }) | undefined;
   if (!targetUser) {
     res.status(404).json({ error: 'User not found' });
     return;
@@ -120,19 +120,32 @@ router.post('/dm', (req: Request, res: Response): void => {
   `).get(userId, target_user_id) as { id: string } | undefined;
 
   if (existing) {
-    res.json({ id: existing.id, exists: true });
+    res.json({
+      id: existing.id,
+      name: targetUser.username,
+      is_group: 0,
+      avatar_color: (targetUser as any).avatar_color ?? '#075E54',
+      created_by: userId,
+      exists: true,
+    });
     return;
   }
 
-  const me = db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as { username: string };
   const id = uuidv4();
-  const name = `${me.username}_${targetUser.username}`;
+  const name = `${userId}_${target_user_id}`;
 
   db.prepare('INSERT INTO rooms (id, name, is_group, created_by) VALUES (?, ?, 0, ?)').run(id, name, userId);
   db.prepare('INSERT INTO room_members (room_id, user_id) VALUES (?, ?)').run(id, userId);
   db.prepare('INSERT INTO room_members (room_id, user_id) VALUES (?, ?)').run(id, target_user_id);
 
-  res.status(201).json({ id, name, is_group: 0, exists: false });
+  res.status(201).json({
+    id,
+    name: targetUser.username,
+    is_group: 0,
+    avatar_color: (targetUser as any).avatar_color ?? '#075E54',
+    created_by: userId,
+    exists: false,
+  });
 });
 
 // List all users (for starting DMs)

@@ -10,27 +10,24 @@ class ChatProvider extends ChangeNotifier {
   final SocketService socket;
 
   List<Room> _rooms = [];
-  final Map<String, List<Message>> _messages = {};
-  final Map<String, Set<String>> _typingUsers = {};
+  final Map<String, List<Message>> _msgs = {};
+  final Map<String, Set<String>> _typing = {};
   bool _roomsLoading = false;
 
   ChatProvider({required this.api, required this.socket}) {
-    socket.onNewMessage = _handleNewMessage;
-    socket.onReactionUpdated = _handleReactionUpdated;
-    socket.onUserTyping = _handleUserTyping;
+    socket.onNewMessage = _onMessage;
+    socket.onReactionUpdated = _onReaction;
+    socket.onUserTyping = _onTyping;
   }
 
   List<Room> get rooms => _rooms;
   bool get roomsLoading => _roomsLoading;
-
-  List<Message> messagesFor(String roomId) => _messages[roomId] ?? [];
-
-  Set<String> typingUsersFor(String roomId) => _typingUsers[roomId] ?? {};
+  List<Message> msgs(String roomId) => _msgs[roomId] ?? [];
+  Set<String> typing(String roomId) => _typing[roomId] ?? {};
 
   Future<void> loadRooms() async {
     _roomsLoading = true;
     notifyListeners();
-
     try {
       _rooms = await api.getRooms();
     } finally {
@@ -40,116 +37,93 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> loadMessages(String roomId, {bool refresh = false}) async {
-    if (_messages.containsKey(roomId) && !refresh) return;
-    final msgs = await api.getMessages(roomId);
-    _messages[roomId] = msgs;
+    if (_msgs.containsKey(roomId) && !refresh) return;
+    _msgs[roomId] = await api.getMessages(roomId);
     notifyListeners();
   }
 
-  Future<void> loadMoreMessages(String roomId) async {
-    final existing = _messages[roomId] ?? [];
+  Future<void> loadOlder(String roomId) async {
+    final existing = _msgs[roomId] ?? [];
     if (existing.isEmpty) return;
-
-    final oldest = existing.first.createdAt.toIso8601String();
-    final older = await api.getMessages(roomId, before: oldest);
+    final older = await api.getMessages(roomId, before: existing.first.createdAt.toIso8601String());
     if (older.isNotEmpty) {
-      _messages[roomId] = [...older, ...existing];
+      _msgs[roomId] = [...older, ...existing];
       notifyListeners();
     }
   }
 
-  void sendMessage({
-    required String roomId,
-    required String content,
-    String? replyToId,
-  }) {
+  void sendMessage(String roomId, String content, {String? replyToId}) {
     socket.sendMessage(roomId: roomId, content: content, replyToId: replyToId);
   }
 
-  void toggleReaction(String messageId, String emoji, String currentUserId) {
-    final msgs = _messages.values.expand((m) => m).where((m) => m.id == messageId);
-    if (msgs.isEmpty) return;
-
-    final msg = msgs.first;
-    final existing = msg.reactions.firstWhere(
-      (r) => r.emoji == emoji && r.users.contains(_currentUsername(currentUserId)),
-      orElse: () => ReactionCount(emoji: emoji, count: 0, users: []),
-    );
-
-    if (existing.count > 0) {
-      socket.removeReaction(messageId, emoji);
-    } else {
-      socket.addReaction(messageId, emoji);
+  void toggleReaction(String messageId, String emoji, String myUsername) {
+    for (final msgs in _msgs.values) {
+      final idx = msgs.indexWhere((m) => m.id == messageId);
+      if (idx < 0) continue;
+      final msg = msgs[idx];
+      final existing = msg.reactions.where((r) => r.emoji == emoji).firstOrNull;
+      if (existing != null && existing.users.contains(myUsername)) {
+        socket.removeReaction(messageId, emoji);
+      } else {
+        socket.addReaction(messageId, emoji);
+      }
+      break;
     }
   }
 
-  void sendTyping(String roomId, {required bool isTyping}) {
-    socket.sendTyping(roomId, isTyping: isTyping);
-  }
+  void sendTyping(String roomId, {required bool isTyping}) =>
+      socket.sendTyping(roomId, isTyping: isTyping);
 
   Future<Room> startDm(String targetUserId) async {
-    final room = await api.createDm(targetUserId);
+    final data = await api.createDm(targetUserId);
+    final room = Room.fromJson(data);
     if (!_rooms.any((r) => r.id == room.id)) {
       _rooms = [room, ..._rooms];
       notifyListeners();
+    } else {
+      return _rooms.firstWhere((r) => r.id == room.id);
     }
     return room;
   }
 
-  Future<Room> createGroup({required String name, required List<String> memberIds}) async {
-    final room = await api.createGroup(name: name, memberIds: memberIds);
+  Future<Room> createGroup(String name, List<String> memberIds) async {
+    final data = await api.createGroup(name, memberIds);
+    final room = Room.fromJson(data);
     _rooms = [room, ..._rooms];
     notifyListeners();
     return room;
   }
 
-  Future<List<User>> getAllUsers() => api.getAllUsers();
+  Future<List<User>> allUsers() => api.getAllUsers();
 
-  void _handleNewMessage(Message message) {
-    final roomId = message.roomId;
-    _messages[roomId] = [...(_messages[roomId] ?? []), message];
-
-    final roomIndex = _rooms.indexWhere((r) => r.id == roomId);
-    if (roomIndex >= 0) {
-      final updated = _rooms[roomIndex].copyWith(
-        lastMessage: message.content,
-        lastMessageAt: message.createdAt.toIso8601String(),
+  void _onMessage(Message msg) {
+    _msgs[msg.roomId] = [...(_msgs[msg.roomId] ?? []), msg];
+    final idx = _rooms.indexWhere((r) => r.id == msg.roomId);
+    if (idx >= 0) {
+      final updated = _rooms[idx].copyWith(
+        lastMessage: msg.content,
+        lastMessageAt: msg.createdAt.toIso8601String(),
       );
-      _rooms = [
-        updated,
-        ..._rooms.where((r) => r.id != roomId),
-      ];
-    }
-
-    notifyListeners();
-  }
-
-  void _handleReactionUpdated(String messageId, List<ReactionCount> reactions) {
-    for (final roomId in _messages.keys) {
-      final msgs = _messages[roomId]!;
-      final idx = msgs.indexWhere((m) => m.id == messageId);
-      if (idx >= 0) {
-        final updated = List<Message>.from(msgs);
-        updated[idx] = msgs[idx].copyWith(reactions: reactions);
-        _messages[roomId] = updated;
-        notifyListeners();
-        break;
-      }
-    }
-  }
-
-  void _handleUserTyping(String userId, String username, String roomId, bool isTyping) {
-    _typingUsers[roomId] ??= {};
-    if (isTyping) {
-      _typingUsers[roomId]!.add(username);
-    } else {
-      _typingUsers[roomId]!.remove(username);
+      _rooms = [updated, ..._rooms.where((r) => r.id != msg.roomId)];
     }
     notifyListeners();
   }
 
-  String _currentUsername(String userId) {
-    // used only for optimistic reaction check — not critical
-    return userId;
+  void _onReaction(String messageId, List<ReactionCount> reactions) {
+    for (final roomId in _msgs.keys) {
+      final idx = _msgs[roomId]!.indexWhere((m) => m.id == messageId);
+      if (idx < 0) continue;
+      final list = List<Message>.from(_msgs[roomId]!);
+      list[idx] = list[idx].copyWith(reactions: reactions);
+      _msgs[roomId] = list;
+      notifyListeners();
+      break;
+    }
+  }
+
+  void _onTyping(String userId, String username, String roomId, bool isTyping) {
+    _typing[roomId] ??= {};
+    isTyping ? _typing[roomId]!.add(username) : _typing[roomId]!.remove(username);
+    notifyListeners();
   }
 }

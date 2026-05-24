@@ -1,58 +1,49 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-class AppColors {
-  static const primary = Color(0xFF075E54);
-  static const primaryLight = Color(0xFF128C7E);
-  static const accent = Color(0xFF25D366);
-  static const sentBubble = Color(0xFFDCF8C6);
-  static const receivedBubble = Colors.white;
-  static const chatBackground = Color(0xFFECE5DD);
-  static const appBarBg = Color(0xFF075E54);
-  static const inputBg = Colors.white;
-  static const replyBg = Color(0xFFD9FDD3);
-  static const timestamp = Color(0xFF667781);
+class C {
+  static const teal = Color(0xFF075E54);
+  static const tealLight = Color(0xFF128C7E);
+  static const green = Color(0xFF25D366);
+  static const sentBubble = Color(0xFFE7FFDB);
+  static const recvBubble = Colors.white;
+  static const chatBg = Color(0xFFEFE7DE);
+  static const timestamp = Color(0xFF8696A0);
+  static const divider = Color(0xFFE9EDEF);
+  static const inputBg = Color(0xFFF0F2F5);
+  static const replyStripe = Color(0xFF00A884);
 }
 
 class AppTheme {
   static ThemeData get light => ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          primary: AppColors.primary,
-          secondary: AppColors.accent,
-        ),
+        useMaterial3: false,
+        primaryColor: C.teal,
+        scaffoldBackgroundColor: Colors.white,
         appBarTheme: const AppBarTheme(
-          backgroundColor: AppColors.appBarBg,
+          backgroundColor: C.teal,
           foregroundColor: Colors.white,
           elevation: 0,
           centerTitle: false,
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Color(0xFF054C44),
+            statusBarIconBrightness: Brightness.light,
+          ),
           titleTextStyle: TextStyle(
             color: Colors.white,
-            fontSize: 18,
+            fontSize: 19,
             fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
           ),
+          iconTheme: IconThemeData(color: Colors.white),
         ),
-        scaffoldBackgroundColor: AppColors.chatBackground,
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: AppColors.inputBg,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: BorderSide.none,
-          ),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: C.teal,
+          primary: C.teal,
+          secondary: C.green,
         ),
-        textTheme: const TextTheme(
-          bodyMedium: TextStyle(fontSize: 15),
-          bodySmall: TextStyle(fontSize: 12, color: AppColors.timestamp),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: C.green,
+          foregroundColor: Colors.white,
         ),
       );
 }

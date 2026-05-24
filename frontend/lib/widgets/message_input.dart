@@ -4,7 +4,7 @@ import '../theme/app_theme.dart';
 
 class MessageInput extends StatefulWidget {
   final void Function(String content, String? replyToId) onSend;
-  final void Function(bool isTyping) onTyping;
+  final void Function(bool) onTyping;
   final ReplyPreview? replyingTo;
   final VoidCallback? onCancelReply;
 
@@ -21,110 +21,119 @@ class MessageInput extends StatefulWidget {
 }
 
 class _MessageInputState extends State<MessageInput> {
-  final _controller = TextEditingController();
-  final _focusNode = FocusNode();
+  final _ctrl = TextEditingController();
   bool _hasText = false;
-  bool _isTyping = false;
+  bool _wasTyping = false;
 
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_onTextChanged);
+    _ctrl.addListener(_onChanged);
   }
 
-  void _onTextChanged() {
-    final hasText = _controller.text.trim().isNotEmpty;
-    if (hasText != _hasText) {
-      setState(() => _hasText = hasText);
-    }
-
-    if (hasText && !_isTyping) {
-      _isTyping = true;
+  void _onChanged() {
+    final has = _ctrl.text.trim().isNotEmpty;
+    if (has != _hasText) setState(() => _hasText = has);
+    if (has && !_wasTyping) {
+      _wasTyping = true;
       widget.onTyping(true);
-    } else if (!hasText && _isTyping) {
-      _isTyping = false;
+    } else if (!has && _wasTyping) {
+      _wasTyping = false;
       widget.onTyping(false);
     }
   }
 
   void _send() {
-    final text = _controller.text.trim();
+    final text = _ctrl.text.trim();
     if (text.isEmpty) return;
-
     final replyId = widget.replyingTo?.id;
-    _controller.clear();
-    _isTyping = false;
+    _ctrl.clear();
+    _wasTyping = false;
     widget.onTyping(false);
     widget.onSend(text, replyId);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (widget.replyingTo != null)
-          _ReplyBar(
-            reply: widget.replyingTo!,
-            onCancel: widget.onCancelReply ?? () {},
-          ),
-        Container(
-          color: const Color(0xFFF0F0F0),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Container(
-                  constraints: const BoxConstraints(maxHeight: 120),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    minLines: 1,
-                    maxLines: 5,
-                    textCapitalization: TextCapitalization.sentences,
-                    style: const TextStyle(fontSize: 15),
-                    decoration: const InputDecoration(
-                      hintText: 'Message',
-                      hintStyle: TextStyle(color: Colors.grey),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      border: InputBorder.none,
+    return Container(
+      color: C.inputBg,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.replyingTo != null) _ReplyBar(reply: widget.replyingTo!, onCancel: widget.onCancelReply!),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Container(
+                      constraints: const BoxConstraints(maxHeight: 130),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(26),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: TextField(
+                              controller: _ctrl,
+                              minLines: 1,
+                              maxLines: 6,
+                              textCapitalization: TextCapitalization.sentences,
+                              style: const TextStyle(fontSize: 15.5, color: Colors.black87),
+                              decoration: const InputDecoration(
+                                hintText: 'Message',
+                                hintStyle: TextStyle(color: Colors.black38, fontSize: 15.5),
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(vertical: 11),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                      ),
                     ),
-                    onSubmitted: (_) => _send(),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                child: GestureDetector(
-                  onTap: _hasText ? _send : null,
-                  child: Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: _hasText ? AppColors.accent : Colors.grey.shade400,
-                      shape: BoxShape.circle,
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: _hasText ? _send : null,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: _hasText ? C.green : Colors.grey.shade400,
+                        shape: BoxShape.circle,
+                      ),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: Icon(
+                          _hasText ? Icons.send_rounded : Icons.mic_rounded,
+                          key: ValueKey(_hasText),
+                          color: Colors.white,
+                          size: 21,
+                        ),
+                      ),
                     ),
-                    child: const Icon(Icons.send, color: Colors.white, size: 20),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -138,38 +147,37 @@ class _ReplyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFEFEFEF),
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+      padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: C.divider)),
+      ),
       child: Row(
         children: [
-          const Icon(Icons.reply, size: 18, color: AppColors.primary),
-          const SizedBox(width: 8),
+          Container(width: 3, height: 36, decoration: BoxDecoration(color: C.replyStripe, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   reply.senderUsername,
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: C.replyStripe, fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 Text(
                   reply.content,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                  style: const TextStyle(fontSize: 13, color: Colors.black45),
                 ),
               ],
             ),
           ),
           IconButton(
             onPressed: onCancel,
-            icon: const Icon(Icons.close, size: 18),
+            icon: const Icon(Icons.close, size: 20, color: Colors.black38),
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
         ],
       ),

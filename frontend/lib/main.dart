@@ -9,8 +9,8 @@ import 'screens/name_screen.dart';
 import 'screens/rooms_screen.dart';
 import 'theme/app_theme.dart';
 
-// ── Change to your machine's local IP when running on a physical device ──
-// Example: const kServer = 'http://192.168.1.42:3000';
+// ── Change to your machine's local IP when running on a physical device.
+// Example: 'http://192.168.1.42:3000'
 const kServer = 'http://localhost:3000';
 
 void main() {
@@ -27,11 +27,13 @@ class SimpleChatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final api = ApiService(baseUrl: kServer);
+    final api    = ApiService(baseUrl: kServer);
     final socket = SocketService(serverUrl: kServer);
 
     return MultiProvider(
       providers: [
+        // SocketService as a plain Provider so widgets can read it directly
+        Provider<SocketService>.value(value: socket),
         ChangeNotifierProvider(create: (_) => AuthProvider(api: api, socket: socket)),
         ChangeNotifierProvider(create: (_) => ChatProvider(api: api, socket: socket)),
       ],
@@ -47,7 +49,6 @@ class SimpleChatApp extends StatelessWidget {
 
 class _Root extends StatefulWidget {
   const _Root();
-
   @override
   State<_Root> createState() => _RootState();
 }
@@ -73,7 +74,7 @@ class _RootState extends State<_Root> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.chat_bubble_rounded, size: 80, color: Colors.white),
-              SizedBox(height: 24),
+              SizedBox(height: 20),
               Text(
                 'SimpleChat',
                 style: TextStyle(
@@ -89,7 +90,8 @@ class _RootState extends State<_Root> {
       );
     }
 
-    final auth = context.watch<AuthProvider>();
-    return auth.isAuthenticated ? const RoomsScreen() : const NameScreen();
+    return context.watch<AuthProvider>().isAuthenticated
+        ? const RoomsScreen()
+        : const NameScreen();
   }
 }

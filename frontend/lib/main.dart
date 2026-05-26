@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'services/api_service.dart';
 import 'services/socket_service.dart';
 import 'services/auth_provider.dart';
 import 'services/chat_provider.dart';
-import 'screens/login_screen.dart';
+import 'screens/name_screen.dart';
 import 'screens/rooms_screen.dart';
 import 'theme/app_theme.dart';
 
-const String kBaseUrl = 'http://localhost:3000';
+// ── Change to your machine's local IP when running on a physical device.
+// Example: 'http://192.168.1.42:3000'
+const kServer = 'http://localhost:3000';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   runApp(const SimpleChatApp());
 }
 
@@ -19,11 +27,13 @@ class SimpleChatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final api = ApiService(baseUrl: kBaseUrl);
-    final socket = SocketService(serverUrl: kBaseUrl);
+    final api    = ApiService(baseUrl: kServer);
+    final socket = SocketService(serverUrl: kServer);
 
     return MultiProvider(
       providers: [
+        // SocketService as a plain Provider so widgets can read it directly
+        Provider<SocketService>.value(value: socket),
         ChangeNotifierProvider(create: (_) => AuthProvider(api: api, socket: socket)),
         ChangeNotifierProvider(create: (_) => ChatProvider(api: api, socket: socket)),
       ],
@@ -31,51 +41,57 @@ class SimpleChatApp extends StatelessWidget {
         title: 'SimpleChat',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
-        home: const _AppRoot(),
+        home: const _Root(),
       ),
     );
   }
 }
 
-class _AppRoot extends StatefulWidget {
-  const _AppRoot();
-
+class _Root extends StatefulWidget {
+  const _Root();
   @override
-  State<_AppRoot> createState() => _AppRootState();
+  State<_Root> createState() => _RootState();
 }
 
-class _AppRootState extends State<_AppRoot> {
-  bool _initialized = false;
+class _RootState extends State<_Root> {
+  bool _ready = false;
 
   @override
   void initState() {
     super.initState();
-    _init();
-  }
-
-  Future<void> _init() async {
-    await context.read<AuthProvider>().tryAutoLogin();
-    if (mounted) setState(() => _initialized = true);
+    context.read<AuthProvider>().tryAutoLogin().then((_) {
+      if (mounted) setState(() => _ready = true);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_initialized) {
+    if (!_ready) {
       return const Scaffold(
+        backgroundColor: C.appBar,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.chat_bubble_rounded, size: 64, color: Color(0xFF075E54)),
-              SizedBox(height: 16),
-              CircularProgressIndicator(color: Color(0xFF075E54)),
+              Icon(Icons.chat_bubble_rounded, size: 80, color: Colors.white),
+              SizedBox(height: 20),
+              Text(
+                'SimpleChat',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
+              ),
             ],
           ),
         ),
       );
     }
 
-    final isAuth = context.watch<AuthProvider>().isAuthenticated;
-    return isAuth ? const RoomsScreen() : const LoginScreen();
+    return context.watch<AuthProvider>().isAuthenticated
+        ? const RoomsScreen()
+        : const NameScreen();
   }
 }

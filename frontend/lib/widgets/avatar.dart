@@ -12,22 +12,27 @@ class UserAvatar extends StatelessWidget {
     this.radius = 20,
   });
 
-  Color _hexToColor(String hex) {
-    final clean = hex.replaceFirst('#', '');
-    return Color(int.parse('FF$clean', radix: 16));
+  Color _parse(String hex) {
+    try {
+      return Color(int.parse('FF${hex.replaceFirst('#', '')}', radix: 16));
+    } catch (_) {
+      return const Color(0xFF075E54);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final initials = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
     return CircleAvatar(
       radius: radius,
-      backgroundColor: _hexToColor(colorHex),
+      backgroundColor: _parse(colorHex),
       child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : '?',
+        initials,
         style: TextStyle(
           color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: radius * 0.9,
+          fontWeight: FontWeight.w600,
+          fontSize: radius * 0.85,
+          height: 1,
         ),
       ),
     );

@@ -4,6 +4,7 @@ export interface User {
   email: string;
   password_hash: string;
   avatar_color: string;
+  last_seen: string | null;
   created_at: string;
 }
 
@@ -27,6 +28,7 @@ export interface Message {
   sender_id: string;
   content: string;
   reply_to_id: string | null;
+  client_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -50,6 +52,7 @@ export interface MessageWithMeta extends Omit<Message, 'sender_id'> {
   sender_color: string;
   reactions: ReactionCount[];
   reply_to: ReplyPreview | null;
+  status: 'sent' | 'delivered' | 'read';
 }
 
 export interface ReplyPreview {
